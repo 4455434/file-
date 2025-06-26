@@ -1,0 +1,132 @@
+<!-- index.html - Netlify-compatible Cloudinary File Manager -->
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>☁️ Cloudinary ফাইল ম্যানেজার</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: radial-gradient(circle at top right,#6a11cb,#2575fc); min-height:100vh; color: white; }
+    .card img { object-fit:cover; height:160px; }
+    #grid .card { background: #111; border: none; }
+  </style>
+</head>
+<body>
+<div class="container py-4">
+  <h1 class="text-center fw-bold mb-4">☁️ Cloudinary ফাইল ম্যানেজার</h1>
+
+  <!-- Upload Form -->
+  <div class="card p-3 mb-4">
+    <div class="row g-2">
+      <div class="col-md-5">
+        <input type="file" id="file" class="form-control" required>
+      </div>
+      <div class="col-md-5">
+        <input type="text" id="folder" class="form-control" placeholder="ফোল্ডার (ঐচ্ছিক)">
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-success" onclick="uploadFile()">আপলোড</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Files Grid -->
+  <h4 class="mb-3">🎒 ফাইল তালিকা</h4>
+  <div id="grid" class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4"></div>
+</div>
+
+<script>
+const CLOUD_NAME = 'your_cloud_name'; // 🟠 আপনার Cloudinary cloud name
+const API_KEY    = '597472996445755';
+const API_SECRET = 'EC3T0_C-SvVjyN9W04AxN8pB4fU';
+
+const uploadPreset = '' // যদি unsigned preset ব্যবহার করেন (অথবা null রাখুন)
+
+function uploadFile() {
+  const fileInput = document.getElementById('file');
+  const folder = document.getElementById('folder').value;
+  const file = fileInput.files[0];
+  if (!file) return alert('ফাইল বেছে নিন');
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', uploadPreset);
+  if (folder) formData.append('folder', folder);
+  formData.append('api_key', API_KEY);
+  formData.append('timestamp', Math.floor(Date.now() / 1000));
+
+  fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
+    method: 'POST',
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.secure_url) {
+      alert('✅ ফাইল আপলোড হয়েছে');
+      loadFiles();
+    } else alert('❌ সমস্যা হয়েছে');
+  });
+}
+
+function loadFiles() {
+  fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/resources/image`, {
+    headers: {
+      Authorization: 'Basic ' + btoa(API_KEY + ':' + API_SECRET)
+    }
+  })
+  .then(res => res.json())
+  .then(data => {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    (data.resources || []).forEach(file => {
+      grid.innerHTML += `
+        <div class="col">
+          <div class="card">
+            <img src="${file.secure_url}" class="card-img-top" />
+            <div class="card-body">
+              <p class="small">${file.public_id}</p>
+              <button class="btn btn-sm btn-light" onclick="copyLink('${file.secure_url}')">লিংক কপি</button>
+              <button class="btn btn-sm btn-danger ms-2" onclick="deleteFile('${file.public_id}')">ডিলিট</button>
+            </div>
+          </div>
+        </div>`
+    });
+  });
+}
+
+function copyLink(url) {
+  navigator.clipboard.writeText(url).then(() => alert('✅ কপি হয়েছে'));
+}
+
+function deleteFile(publicId) {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const string_to_sign = `public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`;
+  const sha1 = new jsSHA("SHA-1", "TEXT");
+  sha1.update(`public_id=${publicId}&timestamp=${timestamp}${API_SECRET}`);
+  const signature = sha1.getHash("HEX");
+
+  const form = new FormData();
+  form.append('public_id', publicId);
+  form.append('api_key', API_KEY);
+  form.append('timestamp', timestamp);
+  form.append('signature', signature);
+
+  fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/destroy`, {
+    method: 'POST',
+    body: form
+  }).then(res => res.json())
+    .then(() => {
+      alert('🗑️ ডিলিট হয়েছে');
+      loadFiles();
+    });
+}
+
+// sha1 lib
+const script = document.createElement('script');
+script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsSHA/3.2.0/sha.js';
+script.onload = loadFiles;
+document.body.appendChild(script);
+</script>
+</body>
+</html>
